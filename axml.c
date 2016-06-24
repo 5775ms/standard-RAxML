@@ -29,6 +29,8 @@
  */
 
 #ifdef WIN32
+#define WIN32_LEAN_AND_MEAN // skips unwanted headers like socket etc.
+#include <windows.h>
 #include <direct.h>
 #endif
 
@@ -49,6 +51,8 @@
 #include <limits.h>
 #include <inttypes.h>
 #include <getopt.h>
+//#include <stdbool.h>
+
 
 #if (defined(_WAYNE_MPI) || defined (_QUARTET_MPI))
 #include <mpi.h>
@@ -396,13 +400,17 @@ static void setRateHetAndDataIncrement(tree *tr, analdef *adef)
 
 double gettime(void)
 {
-#ifdef WIN32
-  time_t tp;
-  struct tm localtm;
-  tp = time(NULL);
-  localtm = *localtime(&tp);
-  return 60.0*localtm.tm_min + localtm.tm_sec;
-#else
+#ifdef WIN32 // WINDOWS build
+	FILETIME tm;
+	ULONGLONG t;
+#if defined(NTDDI_WIN8) && NTDDI_VERSION >= NTDDI_WIN8 // >= WIN8
+	GetSystemTimePreciseAsFileTime( &tm );
+#else // < WIN8
+	GetSystemTimeAsFileTime( &tm );
+#endif
+	t = ((ULONGLONG)tm.dwHighDateTime << 32) | (ULONGLONG)tm.dwLowDateTime;
+	return (double)t / 10000000.0;
+#else // Unixoid build
   struct timeval ttime;
   gettimeofday(&ttime , NULL);
   return ttime.tv_sec + ttime.tv_usec * 0.000001;
@@ -1975,14 +1983,14 @@ static void getinput(analdef *adef, rawdata *rdta, cruncheddata *cdta, tree *tr)
 
 static unsigned char buildStates(int secModel, unsigned char v1, unsigned char v2)
 {
-  unsigned char new = 0;
+  unsigned char newChar = 0;
 
   switch(secModel)
     {
     case SECONDARY_DATA:
-      new = v1;
-      new = new << 4;
-      new = new | v2;
+      newChar = v1;
+      newChar = newChar << 4;
+      newChar = newChar | v2;
       break;
     case SECONDARY_DATA_6:
       {
@@ -2030,38 +2038,38 @@ static unsigned char buildStates(int secModel, unsigned char v1, unsigned char v
 	    unsigned char n1 = meaningDNA[allowedStates[i][0]];
 	    unsigned char n2 = meaningDNA[allowedStates[i][1]];
 
-	    new = n1;
-	    new = new << 4;
-	    new = new | n2;
+	    newChar = n1;
+	    newChar = newChar << 4;
+	    newChar = newChar | n2;
 
-	    intermediateBinaryStates[i] = new;
+	    intermediateBinaryStates[i] = newChar;
 	  }
 
-	new = v1;
-	new = new << 4;
-	new = new | v2;
+	newChar = v1;
+	newChar = newChar << 4;
+	newChar = newChar | v2;
 
 	for(i = 0; i < length; i++)
 	  {
-	    if(new == intermediateBinaryStates[i])
+	    if(newChar == intermediateBinaryStates[i])
 	      break;
 	  }
 	if(i < length)
-	  new = finalBinaryStates[i];
+	  newChar = finalBinaryStates[i];
 	else
 	  {
-	    new = 0;
+	    newChar = 0;
 	    for(i = 0; i < length; i++)
 	      {
 		if(v1 & meaningDNA[allowedStates[i][0]])
 		  {
 		    /*printf("Adding %c%c\n", allowedStates[i][0], allowedStates[i][1]);*/
-		    new |= finalBinaryStates[i];
+		    newChar |= finalBinaryStates[i];
 		  }
 		if(v2 & meaningDNA[allowedStates[i][1]])
 		  {
 		    /*printf("Adding %c%c\n", allowedStates[i][0], allowedStates[i][1]);*/
-		    new |= finalBinaryStates[i];
+		    newChar |= finalBinaryStates[i];
 		  }
 	      }
 	  }	
@@ -2112,25 +2120,25 @@ static unsigned char buildStates(int secModel, unsigned char v1, unsigned char v
 	    unsigned char n1 = meaningDNA[allowedStates[i][0]];
 	    unsigned char n2 = meaningDNA[allowedStates[i][1]];
 
-	    new = n1;
-	    new = new << 4;
-	    new = new | n2;
+	    newChar = n1;
+	    newChar = newChar << 4;
+	    newChar = newChar | n2;
 
-	    intermediateBinaryStates[i] = new;
+	    intermediateBinaryStates[i] = newChar;
 	  }
 
-	new = v1;
-	new = new << 4;
-	new = new | v2;
+	newChar = v1;
+	newChar = newChar << 4;
+	newChar = newChar | v2;
 
 	for(i = 0; i < 6; i++)
 	  {
 	    /* exact match */
-	    if(new == intermediateBinaryStates[i])
+	    if(newChar == intermediateBinaryStates[i])
 	      break;
 	  }
 	if(i < 6)
-	  new = finalBinaryStates[i];
+	  newChar = finalBinaryStates[i];
 	else
 	  {
 	    /* distinguish between exact mismatches and partial mismatches */
@@ -2142,20 +2150,20 @@ static unsigned char buildStates(int secModel, unsigned char v1, unsigned char v
 	      {
 		/* printf("partial mismatch\n"); */
 
-		new = 0;
+		newChar = 0;
 		for(i = 0; i < 6; i++)
 		  {
 		    if((v1 & meaningDNA[allowedStates[i][0]]) && (v2 & meaningDNA[allowedStates[i][1]]))
 		      {
 			/*printf("Adding %c%c\n", allowedStates[i][0], allowedStates[i][1]);*/
-			new |= finalBinaryStates[i];
+			newChar |= finalBinaryStates[i];
 		      }
 		    else
-		      new |=  finalBinaryStates[6];
+		      newChar |=  finalBinaryStates[6];
 		  }
 	      }
 	    else
-	      new = finalBinaryStates[6];
+	      newChar = finalBinaryStates[6];
 	  }	
       }
       break;
@@ -2163,7 +2171,7 @@ static unsigned char buildStates(int secModel, unsigned char v1, unsigned char v
       assert(0);
     }
 
-  return new;
+  return newChar;
 
 }
 
@@ -3050,7 +3058,181 @@ static void checkSequences(tree *tr, rawdata *rdta, analdef *adef)
 
 
 
+static void printPartitionFile(tree *tr, analdef *adef, char* newPartitionFile)
+{
+  if(adef->useMultipleModel && !filexists(newPartitionFile))
+    {
+      FILE 
+	*newFile = myfopen(newPartitionFile, "wb");
+     
+      int 	
+	i,
+	l = 1,
+	partitions = 0;
 
+      printBothOpen("\n\nA partitioned model file with model assignments for bootstrap alignments \n");
+      printBothOpen("is printed to file %s\n",newPartitionFile);
+      printBothOpen("IMPORTANT: You MUST use this new model file and NOT the original one when running RAxML and ExaML on these bootstrapped alignments!\n\n");
+
+
+      for(i = 1; i < tr->cdta->endsite; i++)
+	assert(tr->model[i] >= tr->model[i-1]);	
+	       
+      for(i = 0; i < tr->NumberOfModels; i++)
+	{
+	  int 	   
+	    lower, 
+	    upper;
+
+	    switch(tr->partitionData[i].dataType)
+	      {
+	      case AA_DATA:
+		{
+		  char
+		    AAmodel[1024];
+
+		  if(tr->partitionData[i].protModels != PROT_FILE)
+		    {
+		      if(tr->partitionData[i].ascBias)
+			{
+			  strcpy(AAmodel, "ASC_");
+			  strcat(AAmodel, protModels[tr->partitionData[i].protModels]);
+			}
+		      else
+			strcpy(AAmodel, protModels[tr->partitionData[i].protModels]);
+		      if(tr->partitionData[i].usePredefinedProtFreqs == FALSE)
+			strcat(AAmodel, "F");
+
+		      if(tr->partitionData[i].optimizeBaseFrequencies == TRUE)
+			strcat(AAmodel, "X");
+
+		      assert(!(tr->partitionData[i].optimizeBaseFrequencies && tr->partitionData[i].usePredefinedProtFreqs));
+
+		      fprintf(newFile, "%s, ", AAmodel);
+		    }
+		  else
+		    fprintf(newFile, "[%s], ", tr->partitionData[i].proteinSubstitutionFileName);
+		}
+		break;
+	      case DNA_DATA:
+		if(tr->partitionData[i].ascBias)
+		  {
+		    if(tr->partitionData[i].optimizeBaseFrequencies == TRUE)
+		      fprintf(newFile, "ASC_DNAX, ");
+		    else
+		      fprintf(newFile, "ASC_DNA, ");
+		  }
+		else
+		  {
+		    if(tr->partitionData[i].optimizeBaseFrequencies == TRUE)
+		      fprintf(newFile, "DNAX, ");
+		    else
+		      fprintf(newFile, "DNA, ");
+		  }
+		break;
+	      case BINARY_DATA:
+		 if(tr->partitionData[i].ascBias)
+		   {
+		     if(tr->partitionData[i].optimizeBaseFrequencies == TRUE)
+		       fprintf(newFile, "ASC_BINX, ");
+		     else
+		       fprintf(newFile, "ASC_BIN, ");
+		   }
+		 else
+		   {
+		     if(tr->partitionData[i].optimizeBaseFrequencies == TRUE)
+		       fprintf(newFile, "BINX, ");
+		     else
+		       fprintf(newFile, "BIN, ");
+		   }
+		break;
+	      case GENERIC_32:
+		if(tr->partitionData[i].ascBias)
+		  {
+		    if(tr->partitionData[i].optimizeBaseFrequencies == TRUE)
+		      fprintf(newFile, "ASC_MULTIX, ");
+		    else
+		      fprintf(newFile, "ASC_MULTI, ");
+		  }
+		else
+		  {
+		     if(tr->partitionData[i].optimizeBaseFrequencies == TRUE)
+		      fprintf(newFile, "MULTIX, ");
+		     else
+		      fprintf(newFile, "MULTI, ");
+		  }
+		break;
+	      case GENERIC_64:
+		if(tr->partitionData[i].ascBias)
+		  {
+		    if(tr->partitionData[i].optimizeBaseFrequencies == TRUE)
+		      fprintf(newFile, "ASC_CODONX, ");
+		    else
+		      fprintf(newFile, "ASC_CODON, ");
+		  }
+		else
+		  {
+		     if(tr->partitionData[i].optimizeBaseFrequencies == TRUE)
+		      fprintf(newFile, "CODONX, ");
+		    else
+		      fprintf(newFile, "CODON, ");
+		  }
+		break;
+	      default:
+		assert(0);
+	      }
+
+	    fprintf(newFile, "%s = ", tr->partitionData[i].partitionName);
+
+	    int 
+	      k = 0;
+	    
+	    while(k < tr->cdta->endsite)
+	      {
+		if(tr->model[k] == i)
+		  {
+		    lower = l;
+		    
+		    do
+		      {
+			l += tr->cdta->aliaswgt[k];
+		      }
+		    while((++k < tr->cdta->endsite) && (tr->model[k] == i) );
+		    
+		    upper = l-1;
+
+		    if(lower == upper)		      		       
+		      fprintf(newFile, "%d", lower);		 
+		    else
+		      {
+			assert(lower < upper);			
+			fprintf(newFile, "%d-%d", lower, upper);		  
+		      }		   
+		    partitions++;
+		  }
+		else
+		  k++;
+	      }
+            //printf("k: %d, cdta: %d\n", k, tr->cdta->endsite);
+            assert(k == tr->cdta->endsite);	    
+	    fprintf(newFile, "\n");
+	}
+      
+      assert(partitions == tr->NumberOfModels);
+      //printf("l:%d, rdta: %d\n", l, tr->rdta->sites);
+      assert(l == tr->rdta->sites + 1);
+      //assert(parts == tr->NumberOfModels);
+      fclose(newFile);      
+    }
+  else
+    {
+      if(adef->useMultipleModel)
+	{
+	  printBothOpen("\nA partitioned model file with model assignments for bootstrap alignments\n");
+	  printBothOpen("has already been printed to  file %s\n",newPartitionFile);
+	}
+    }
+}
 
 static void generateBS(tree *tr, analdef *adef)
 {
@@ -3060,10 +3242,27 @@ static void generateBS(tree *tr, analdef *adef)
     k, 
     w;
   
-  char outName[1024], buf[16];
+  char outName[1024], partName[1024], buf[16];
   FILE *of;
 
   assert(adef->boot != 0);
+
+  {
+    int 
+      i,
+      w = 0;
+
+    for(i = 0; i < tr->cdta->endsite; i++)
+      w += tr->cdta->aliaswgt[i];        
+
+    if(w < tr->rdta->sites)
+      {
+	printBothOpen("Error in BS replicate generation. Apparently your input alignment contains %d completely undetermined sites.\n", tr->rdta->sites - w);
+	printBothOpen("RAxML cowardly refuses to generate BS replicate MSAs on original MSAs containing entirely undetermined sites.\n\n");
+	errorExit(-1);
+      }
+  }
+  
 
   for(i = 0; i < adef->multipleRuns; i++)
     {
@@ -3078,12 +3277,24 @@ static void generateBS(tree *tr, analdef *adef)
 
       assert(count == tr->fullSites);
 
+      /* generate model file name */
+      strcpy(partName, workdir);
+      strcat(partName, modelFileName);
+      strcat(partName, ".BS");
+      sprintf(buf, "%d", i);
+      strcat(partName, buf);
+      
+      printPartitionFile(tr, adef, partName);
+      /*******/
+       
+
       strcpy(outName, workdir);
       strcat(outName, seq_file);
       strcat(outName, ".BS");
       sprintf(buf, "%d", i);
       strcat(outName, buf);
       printf("Printing replicate %d to %s\n", i, outName);
+
 
       of = myfopen(outName, "wb");
 
@@ -3360,8 +3571,7 @@ static void allocNodex (tree *tr)
 	  	 
 	  tr->partitionData[model].ascExpVector = (int *)rax_calloc(((size_t)tr->innerNodes) * ((size_t)tr->partitionData[model].states),
 								 sizeof(int));
-
-	  tr->partitionData[model].ascMissingVector = (int *)rax_calloc((size_t)(tr->mxtips + 1), sizeof(int));
+	 
 	  
 	  tr->partitionData[model].ascSumBuffer = (double *)rax_malloc(((size_t)tr->partitionData[model].ascOffset) *
 								       sizeof(double));
@@ -3500,6 +3710,9 @@ static void initAdef(analdef *adef)
   adef->noSequenceCheck = FALSE;
   adef->useBFGS = TRUE;
   adef->setThreadAffinity = FALSE;
+  adef->bootstopPermutations = 100;
+  adef->fcThreshold = 99;
+  adef->sampleQuartetsWithoutReplacement = FALSE;
 }
 
 static int modelExists(char *model, analdef *adef)
@@ -4569,7 +4782,7 @@ static void parseOutgroups(char *outgr, tree *tr)
 static void printVersionInfo(boolean terminal, FILE *infoFile)
 {
   char 
-    text[11][1024];
+    text[12][1024];
 
   int 
     i;
@@ -4581,13 +4794,14 @@ static void printVersionInfo(boolean terminal, FILE *infoFile)
   sprintf(text[4], "Alexey Kozlov     (HITS)\n"); 
   sprintf(text[5], "Kassian Kobert    (HITS)\n"); 
   sprintf(text[6], "David Dao         (KIT and HITS)\n");
-  sprintf(text[7], "Nick Pattengale   (Sandia)\n"); 
-  sprintf(text[8], "Wayne Pfeiffer    (SDSC)\n");
-  sprintf(text[9], "Akifumi S. Tanabe (NRIFS)\n");  
-  sprintf(text[10], "Charlie Taylor    (UF)\n\n");
+  sprintf(text[7], "Sarah Lutteropp   (KIT and HITS)\n");
+  sprintf(text[8], "Nick Pattengale   (Sandia)\n"); 
+  sprintf(text[9], "Wayne Pfeiffer    (SDSC)\n");
+  sprintf(text[10], "Akifumi S. Tanabe (NRIFS)\n");  
+  sprintf(text[11], "Charlie Taylor    (UF)\n\n");
   
 
-  for(i = 0; i < 10; i++)
+  for(i = 0; i < 12; i++)
     {
       if(terminal)    
 	printf("%s", text[i]);
@@ -4773,10 +4987,13 @@ static void printREADME(void)
   printf("      [--flag-check][--auto-prot=ml|bic|aic|aicc]\n");
   printf("      [--epa-keep-placements=number][--epa-accumulated-threshold=threshold]\n");
   printf("      [--epa-prob-threshold=threshold]\n");
-  printf("      [--JC69][--K80][--HKY85][--asc-miss=fraction]\n");
+  printf("      [--JC69][--K80][--HKY85]\n");
 #if (defined(_WAYNE_MPI) && defined(_USE_PTHREADS))
   printf("      [--set-thread-affinity]\n");
 #endif
+  printf("      [--bootstop-perms=number]\n");
+  printf("\n");
+  printf("      [--quartets-without-replacement]\n");
   printf("\n");
   printf("      -a      Specify a column weight file name to assign individual weights to each column of \n");
   printf("              the alignment. Those weights must be integers separated by any type and number \n");
@@ -5039,7 +5256,7 @@ static void printREADME(void)
   printf("\n");
   printf("      -n      Specifies the name of the output file.\n");
   printf("\n");
-  printf("      -o      Specify the name of a single outgrpoup or a comma-separated list of outgroups, eg \"-o Rat\" \n");
+  printf("      -o      Specify the name of a single outgroup or a comma-separated list of outgroups, eg \"-o Rat\" \n");
   printf("              or \"-o Rat,Mouse\", in case that multiple outgroups are not monophyletic the first name \n");
   printf("              in the list will be selected as outgroup, don't leave spaces between taxon names!\n"); 
   printf("\n");
@@ -5212,9 +5429,7 @@ static void printREADME(void)
    printf("      --HKY85 specify that all DNA partitions will evolve under the HKY85 model, this overrides all other model specifications for DNA partitions.\n");
   printf("\n");
   printf("                  DEFAULT: Off\n");
-  printf("\n");
-  printf("      --asc-miss=fraction specify the fraction of missing data in the variable sites of the alignment you are trying to correct for \n");
-  printf("                  ascertainment bias. Experimental option, needs to be tested!\n");
+  printf("\n");  
 #if (defined(_WAYNE_MPI) && defined(_USE_PTHREADS))
   printf("\n");
   printf("      --set-thread-affinity specify that thread-to-core affinity shall be set by RAxML for the hybrid MPI-PThreads version\n");
@@ -5222,6 +5437,16 @@ static void printREADME(void)
   printf("                  DEFAULT: Off\n");  
   printf("\n");
 #endif
+  printf("\n");
+  printf("      --bootstop-perms=number specify the number of permutations to be conducted for the bootstopping/bootstrap convergence test.\n");
+  printf("                  The allowed minimum number is 100!\n");
+  printf("\n");
+  printf("                  DEFAULT: 100\n"); 
+  printf("\n");
+  printf("      --quartets-without-replacement specify that quartets are randomly subsampled, but without replacement.\n");
+   printf("\n");
+  printf("                  DEFAULT: random sampling with replacements\n"); 
+  printf("\n");
   printf("\n\n\n\n");
 
 }
@@ -5350,10 +5575,6 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
   tr->useJC69 = FALSE;
   tr->useHKY85 = FALSE;
 
-  //asecryainment bias correction missing data 
-
-  tr->useAscMissing = FALSE;
-
 #ifdef _BASTIEN
   tr->doBastienStuff = FALSE;
 #endif
@@ -5375,7 +5596,7 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
   while(1)
     {      
       static struct 
-	option long_options[16] =
+	option long_options[17] =
 	{	 
 	  {"mesquite",                  no_argument,       &flag, 1},
 	  {"silent",                    no_argument,       &flag, 1},
@@ -5389,9 +5610,10 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
 	  {"epa-prob-threshold",        required_argument, &flag, 1}, 
 	  {"JC69",                      no_argument,       &flag, 1},
 	  {"K80",                       no_argument,       &flag, 1},
-	  {"HKY85",                     no_argument,       &flag, 1},
-	  {"asc-miss",                  required_argument, &flag, 1},	 	 
+	  {"HKY85",                     no_argument,       &flag, 1},	 	 	 
 	  {"set-thread-affinity",       no_argument,       &flag, 1},
+	  {"bootstop-perms",            required_argument, &flag, 1},
+	  {"quartets-without-replacement", no_argument,    &flag, 1},
 	  {0, 0, 0, 0}
 	};
       
@@ -5573,30 +5795,31 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
 	    case 12:
 	       tr->useHKY85 = TRUE;
 	      break;
-	      break;
+	      break;	   
 	    case 13:
-	       if(sscanf(optarg, "%lf", &(tr->ascMissing)) != 1)
-		{
-		  printf("\nError parsing ascertainment bias missing data fraction correction, RAxML expects a floating point value > 0.0 and < 1.0\n\n");
-		  errorExit(-1);
-		}
-	       if(tr->ascMissing <= 0.0 || tr->ascMissing >= 1.0)
-		{
-		  printf("\nError parsing ascertainment missing data fraction correction, RAxML expects a floating point value >= 0.0 and <= 1.0\n\n");
-		  errorExit(-1);
-		}
-#ifdef _USE_PTHREADS
-	       printf("\nError: ascertainment missing data fraction correction not implemented for PThreads version yet, exiting!\n\n");
-	       errorExit(-1);
-#endif
-	       tr->useAscMissing = TRUE;
-	      break;
-	    case 14:
 #if (defined(_WAYNE_MPI) && defined(_USE_PTHREADS))
 	      adef->setThreadAffinity = TRUE;
 #else
 	      printf("Warning: flag --set-thread-affinity has no effect if you don't use the hybrid MPI-PThreads version\n");
 #endif
+	      break;
+	    case 14:
+	      {
+		int 
+		  perms = -1;
+		
+		if(sscanf(optarg,"%d", &perms) != 1 || (perms < 100))
+		  {
+		    printf("\nError parsing number of bootstop permutations to execute, RAxML expects a positive integer value larger or equal to 100\n\n");
+		    errorExit(-1);
+		  }
+		
+		adef->bootstopPermutations = perms;
+		adef->fcThreshold = perms - round((double)perms / 100.0);		
+	      }
+	      break;
+	    case 15:
+	      adef->sampleQuartetsWithoutReplacement = TRUE;
 	      break;
 	    default:
 	      if(flagCheck)
@@ -8153,6 +8376,7 @@ static void finalizeInfoFile(tree *tr, analdef *adef)
 			default:
 			  assert(0);
 			}
+		    }
 		    break;
 		  case GENERIC_64:
 		    assert(0);
@@ -8240,13 +8464,12 @@ static void finalizeInfoFile(tree *tr, analdef *adef)
 			}	 
 		    }
 		    break;
-		    case BINARY_DATA:
-		      params += 1;
-		      break;
-		    default:
-		      assert(0);
-		    }
-		  }
+		  case BINARY_DATA:
+		    params += 1;
+		    break;
+		  default:
+		    assert(0);
+		  }	      
 		
 		if(adef->useInvariant)
 		  params += 2;
@@ -8693,9 +8916,7 @@ static void allocNodex(tree *tr, int tid, int n)
 								    sizeof(double));
 
 	  tr->partitionData[model].ascExpVector = (int *)rax_calloc(((size_t)tr->innerNodes) * ((size_t)tr->partitionData[model].states),
-								 sizeof(int));
-
-	  tr->partitionData[model].ascMissingVector = (int *)rax_calloc((size_t)(tr->mxtips + 1), sizeof(int));
+								 sizeof(int));	  
 	  
 	  tr->partitionData[model].ascSumBuffer = (double *)rax_malloc(((size_t)tr->partitionData[model].ascOffset) *
 								       sizeof(double));	  
@@ -9806,10 +10027,13 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
 	{
 	  for(model = 0; model < localTree->NumberOfModels; model++)
 	    {
-	      memcpy(localTree->partitionData[model].EIGN_LG4[0],    tr->partitionData[model].EIGN_LG4[0],    sizeof(double) * 19);
-	      memcpy(localTree->partitionData[model].EIGN_LG4[1],    tr->partitionData[model].EIGN_LG4[1],    sizeof(double) * 19);
-	      memcpy(localTree->partitionData[model].EIGN_LG4[2],    tr->partitionData[model].EIGN_LG4[2],    sizeof(double) * 19);
-	      memcpy(localTree->partitionData[model].EIGN_LG4[3],    tr->partitionData[model].EIGN_LG4[3],    sizeof(double) * 19);
+	      if(tr->partitionData[model].protModels == LG4 || tr->partitionData[model].protModels == LG4X)
+		{
+		  memcpy(localTree->partitionData[model].EIGN_LG4[0],    tr->partitionData[model].EIGN_LG4[0],    sizeof(double) * 19);
+		  memcpy(localTree->partitionData[model].EIGN_LG4[1],    tr->partitionData[model].EIGN_LG4[1],    sizeof(double) * 19);
+		  memcpy(localTree->partitionData[model].EIGN_LG4[2],    tr->partitionData[model].EIGN_LG4[2],    sizeof(double) * 19);
+		  memcpy(localTree->partitionData[model].EIGN_LG4[3],    tr->partitionData[model].EIGN_LG4[3],    sizeof(double) * 19);
+		}
 	    }
 	}
       break;
@@ -11287,6 +11511,185 @@ unsigned int precomputed16_bitcount (unsigned int n)
 /* functions to compute likelihoods on quartets */
 
 
+/*** functions by Sarah for drawing quartets without replacement ***/
+
+/*
+Given the following nested for-loops:
+for b = a+1 to n-2
+  for c = b+1 to n-1
+    for d = c+1 to n
+How many iterations do we have for a given a?
+*/
+static uint64_t f2(int n, int a) 
+{
+  long double nDouble = n;
+  long double aDouble = a;
+  long double res = (nDouble - aDouble) * (nDouble - 1 - aDouble) * (nDouble - 2 - aDouble) / 6;
+  return round(res);
+};
+
+/*
+Given the following nested for-loops:
+for c = b+1 to n-1
+  for d = c+1 to n
+How many iterations do we have for a given b?
+*/
+static uint64_t f3(int n, int b) 
+{
+  long double nDouble = n;
+  long double bDouble = b;
+  long double res = (nDouble - bDouble) * (nDouble - 1 - bDouble) / 2;
+  return round(res);
+};
+
+/*
+Given the following for-loop:
+for d = c+1 to n
+How many iterations do we have for a given c?
+*/
+static uint64_t f4(int n, int c) 
+{
+  return (n-c);
+};
+
+static void preprocessQuartetPrefix(int numberOfTaxa, uint64_t *prefixSumF2, uint64_t *prefixSumF3, uint64_t *prefixSumF4)
+{
+  int 
+    i,
+    n = numberOfTaxa;
+  
+  /*
+  Given the following nested for-loops:
+  it = 0;
+  for a = 1 to n-3
+    for b = a+1 to n-2
+      for c = b+1 to n-1
+        for d = c+1 to n
+          it++;
+  prefixSumF2[i]: first value of it that belongs to a = i+1 
+  prefixSumF3[i]: first value of it that belongs to b = i+2
+  prefixSumF4[i]: first value of it that belongs to c = i+3
+  */
+  prefixSumF2[0] = 1;
+  prefixSumF3[0] = 1;
+  prefixSumF4[0] = 1;
+  
+  for (i = 1; i < n - 3; ++i) 
+    {
+      prefixSumF2[i] = prefixSumF2[i - 1] + f2(n, i);
+      prefixSumF3[i] = prefixSumF3[i - 1] + f3(n, i+1);
+      prefixSumF4[i] = prefixSumF4[i - 1] + f4(n, i+2);
+  }
+}
+
+/*
+Binary search in sorted array of size n-2. Returns the index of the greatest value in array that is <= z.
+*/
+static unsigned int binarySearch(uint64_t* array, uint64_t z, int n)
+{
+  unsigned int 
+    first = 0,
+    last = n-3,
+    middle = (first + last) / 2, 
+    lastSmallerOrEqual = 0;
+  
+  while(first <= last)
+    {
+      if(array[middle] < z)
+	{
+	  first = middle + 1;
+	  lastSmallerOrEqual = middle;
+	}
+      else 
+	{
+	  if (array[middle] > z)	  
+	    last = middle-1;	 
+	  else 
+	    { 
+	      // array[middle] == z
+	      lastSmallerOrEqual = middle;
+	      break;
+	    }
+	}
+      
+      middle = (first + last)/2;
+    }
+
+  return lastSmallerOrEqual;
+}
+
+/**
+Map an integer value z to a quartet (t1,t2,t3,t4).
+
+@param numberOfTaxa The number of taxa in the tree.
+@param z A value encoding a quartet (t1,t2,t3,t4). 
+*/
+static void mapNumberToQuartet(int numberOfTaxa, uint64_t z, int *t1, int *t2, int *t3, int *t4, uint64_t *prefixSumF2, uint64_t *prefixSumF3, uint64_t *prefixSumF4)
+{
+  /*
+  Given the following nested for-loops:
+  z = 0;
+  for t1 = 1 to numberOfTaxa-3
+    for t2 = t1+1 to numberOfTaxa-2
+      for t3 = t2+1 to numberOfTaxa-1
+        for t4 = t3+1 to numberOfTaxa
+          z++;
+  Find the quartet (t1,t2,t3,t4) that belongs to the given value of z.
+  */
+  
+  uint64_t    
+    wantedT1 = z;
+
+  // find the first value of z that belongs to t1
+  *t1 = binarySearch(prefixSumF2, z, numberOfTaxa) + 1;
+
+  uint64_t 
+    foundT1 = prefixSumF2[*t1 - 1];
+  
+  if(wantedT1 == foundT1) 
+    {
+      *t2 = *t1+1;
+      *t3 = *t1+2;
+      *t4 = *t1+3;
+      return;
+    }
+  
+  uint64_t 
+    wantedT2 = (prefixSumF3[*t1 - 1]) + (wantedT1 - foundT1);
+  
+  // find the first value of z that belongs to t2
+  *t2 = binarySearch(prefixSumF3, wantedT2, numberOfTaxa) + 2;
+
+  uint64_t 
+    foundT2 = prefixSumF3[*t2 - 2];
+  
+  if(wantedT2 == foundT2) 
+    {
+      *t3 = *t2 + 1;
+      *t4 = *t2 + 2;
+      return;
+    }
+  
+  uint64_t 
+    wantedT3 = (prefixSumF4[*t2 - 2]) + (wantedT2 - foundT2);
+  
+  // find the first value of z that belongs to t3
+  *t3 = binarySearch(prefixSumF4, wantedT3, numberOfTaxa) + 3;
+
+  uint64_t 
+    foundT3 = prefixSumF4[*t3 - 3];
+  
+  if (wantedT3 == foundT3) 
+    {
+      *t4 = *t3 + 1;
+      return;
+    }
+
+  // find the value of z that belongs to t4
+  *t4 = wantedT3 - foundT3 + *t3 + 1;
+}
+
+
 /* a parser error function */
 
 static void parseError(int c)
@@ -11552,6 +11955,8 @@ static void startQuartetMaster(tree *tr, FILE *f)
 
 #endif
 
+
+
 static void computeAllThreeQuartets(tree *tr, nodeptr q1, nodeptr q2, int t1, int t2, int t3, int t4, FILE *f, analdef *adef)
 {
   /* set the tip nodes to different sequences 
@@ -11564,7 +11969,7 @@ static void computeAllThreeQuartets(tree *tr, nodeptr q1, nodeptr q2, int t1, in
     p4 = tr->nodep[t4];
   
   double 
-    l;
+    l; 
 
 #ifdef _QUARTET_MPI
   quartetResult 
@@ -11630,32 +12035,253 @@ static void computeAllThreeQuartets(tree *tr, nodeptr q1, nodeptr q2, int t1, in
 #define RANDOM_QUARTETS 1
 #define GROUPED_QUARTETS 2
 
+/**
+Sample random quartets in ascending order using the methodA algorithm from J. S. Vitter, "An efficient algorithm for sequential random sampling". The runtime of this algorithm is O(numberOfQuartets).
 
+@param tr The tree.
+@param numberOfTaxa The number of taxa in the tree.
+@param seed
+@param numberOfQuartets The total number of different quartets that exist for numberOfTaxa taxa.
+@param randomQuartets The number of quartets to sample.
+@param q1
+@param q2
+@param prefixSumF2
+@param prefixSumF3
+@param prefixSumF4
+@param f
+@param adef
+@param actVal The value of the last drawn random number representing a quartet.
+*/
+static void sampleQuartetsWithoutReplacementA(tree *tr, int numberOfTaxa, int64_t seed, uint64_t numberOfQuartets, uint64_t randomQuartets, nodeptr q1, nodeptr q2, uint64_t *prefixSumF2, uint64_t *prefixSumF3, uint64_t *prefixSumF4, FILE *f, analdef *adef, uint64_t actVal)
+{
+  int64_t 
+    myseed = seed;
+
+  uint64_t    
+    sampleSize = randomQuartets,
+    quartetCounter = 0,
+    top = numberOfQuartets - sampleSize,
+    s;
+  
+  int 
+    t1,
+    t2,
+    t3,
+    t4;
+
+  double 
+    NReal = (double)numberOfQuartets, 
+    v, 
+    quot; 
+  
+  while(sampleSize >= 2)
+    {
+      v = randum(&myseed);
+      s = 0;
+      quot = top / NReal;
+    
+      while (quot > v)
+	{
+	  s++; 
+	  top--; 
+	  NReal--;
+	  quot = (quot * top) / NReal;
+	}
+    // Skip over the next s records and select the following one for the sample
+      actVal += s+1;
+      mapNumberToQuartet(numberOfTaxa, actVal, &t1, &t2, &t3, &t4, prefixSumF2, prefixSumF3, prefixSumF4);
+      computeAllThreeQuartets(tr, q1, q2, t1, t2, t3, t4, f, adef);
+      quartetCounter++;
+      
+      NReal--;
+      sampleSize--;
+    }
+  
+  // Special case sampleSize == 1
+  s = trunc(round(NReal) * randum(&myseed));
+  // Skip over the next s records and select the following one for the sample
+  actVal += s+1;
+  
+  mapNumberToQuartet(numberOfTaxa, actVal, &t1, &t2, &t3, &t4, prefixSumF2, prefixSumF3, prefixSumF4);
+  #ifdef _QUARTET_MPI
+				  //MPI version very simple and naive way to determine which processor 
+				  //is going to do the likelihood calculations for this quartet
+				  if((quartetCounter % (uint64_t)(processes - 1)) == (uint64_t)(processID - 1))
+#endif
+  computeAllThreeQuartets(tr, q1, q2, t1, t2, t3, t4, f, adef);
+  quartetCounter++;
+
+  assert(quartetCounter == randomQuartets);
+}
+
+/**
+Sample random quartets in ascending order using the methodD algorithm from J. S. Vitter, "An efficient algorithm for sequential random sampling". The runtime of this algorithm is O(randomQuartets). The main idea of the algorithm is to decide ho many quartets to skip instead of testing for each quartet whether to take it or not.
+
+@param tr The tree.
+@param numberOfTaxa The number of taxa in the tree.
+@param seed
+@param numberOfQuartets The total number of different quartets that exist for numberOfTaxa taxa.
+@param randomQuartets The number of quartets to sample.
+@param q1
+@param q2
+@param prefixSumF2
+@param prefixSumF3
+@param prefixSumF4
+@param f
+@param adef
+@param actVal The value of the last drawn random number representing a quartet.
+*/
+static void sampleQuartetsWithoutReplacementD(tree *tr, int numberOfTaxa, int64_t seed, uint64_t numberOfQuartets, uint64_t randomQuartets, nodeptr q1, nodeptr q2, uint64_t *prefixSumF2, uint64_t *prefixSumF3, uint64_t *prefixSumF4, FILE *f, analdef *adef, uint64_t actVal)
+{
+  int64_t       
+    myseed = seed;
+  
+  uint64_t
+    sampleSize = randomQuartets,
+    quartetCounter = 0,
+    s,
+    qu1,
+    threshold,
+    t,
+    limit;
+    
+  int 
+    t1,
+    t2,
+    t3,
+    t4;
+    
+  double
+    negalphainv = -1.0/13,
+    nreal = sampleSize,
+    ninv = 1.0 / nreal,
+    Nreal = numberOfQuartets,
+    vprime = exp(log(randum(&myseed)) * ninv),
+    qu1real,
+    nmin1inv,
+    x,
+    u, 
+    negSreal,
+    y1,
+    y2,
+    top,
+    bottom;
+    
+  qu1 = -sampleSize + 1 + numberOfQuartets;
+  qu1real = -nreal + 1.0 + Nreal;
+  threshold = -negalphainv * sampleSize;
+
+  while((sampleSize > 1) && (threshold < numberOfQuartets))
+  {
+    nmin1inv = 1.0 / (-1.0 + nreal);
+    while(TRUE)
+      {
+	while (TRUE)
+	  // step D2: Generate U and X
+	  {
+	    x = Nreal * (-vprime + 1.0);
+	    s = trunc(x);
+	    if (s < qu1) break;
+	    vprime = exp(log(randum(&myseed)) * ninv);
+	  }
+	u = randum(&myseed);
+	negSreal = (double) s * (-1);
+	// step D3: Accept?
+	y1 = exp(log(u * Nreal / qu1real) * nmin1inv);
+	vprime = y1 * (-x / Nreal + 1.0) * (qu1real / (negSreal + qu1real));
+	if (vprime <= 1.0) break; // Accept! test (2.8) is true
+	// step D4: Accept?
+	y2 = 1.0;
+	top = -1.0 + Nreal;
+	if(-1 + sampleSize > s)
+	  {
+	    bottom = -nreal + Nreal;
+	    limit = -s + numberOfQuartets;
+	  }
+	else
+	  {
+	    bottom = -1.0 + negSreal + Nreal;
+	    limit = qu1;
+	  }
+	for (t = -1 + numberOfQuartets; t >= limit; t--)
+	  {
+	    y2 = (y2 * top)/bottom;
+	    top = -1.0 + top;
+	    bottom = -1.0 + bottom;
+	  }
+	
+	if(Nreal / (-x + Nreal) >= y1 * exp(log(y2) * nmin1inv))
+	  {
+	    // Accept!
+	    vprime = exp(log(randum(&myseed)) * nmin1inv);
+	    break;
+	  }
+	vprime = exp(log(randum(&myseed)) * ninv);
+      }
+    // Step D5: Select the (s+1)st record
+    // Skip over the next s records and select the following one for the sample
+    actVal += s+1;
+    mapNumberToQuartet(numberOfTaxa, actVal, &t1, &t2, &t3, &t4, prefixSumF2, prefixSumF3, prefixSumF4);
+    computeAllThreeQuartets(tr, q1, q2, t1, t2, t3, t4, f, adef);
+    quartetCounter++;
+    
+    numberOfQuartets = -s + (-1 + numberOfQuartets);
+    Nreal = negSreal + (-1.0 + Nreal);
+    sampleSize--;
+    nreal = nreal - 1.0;
+    ninv = nmin1inv;
+    qu1 = qu1 - s;
+    qu1real += negSreal;
+    threshold += negalphainv;
+  }
+  if (sampleSize > 1)
+    {
+      // Use Method A to finish the sampling
+      assert(quartetCounter == randomQuartets - sampleSize);
+      sampleQuartetsWithoutReplacementA(tr, numberOfTaxa, seed, numberOfQuartets, sampleSize, q1, q2, prefixSumF2, prefixSumF3, prefixSumF4, f, adef, actVal);
+    }
+  else // Special case sampleSize == 1
+    {
+      s = trunc(numberOfQuartets * vprime);
+      // Skip over the next s records and select the following one for the sample
+      actVal += s+1;
+      mapNumberToQuartet(numberOfTaxa, actVal, &t1, &t2, &t3, &t4, prefixSumF2, prefixSumF3, prefixSumF4);
+      #ifdef _QUARTET_MPI
+				  //MPI version very simple and naive way to determine which processor 
+				  //is going to do the likelihood calculations for this quartet
+				  if((quartetCounter % (uint64_t)(processes - 1)) == (uint64_t)(processID - 1))
+#endif
+      computeAllThreeQuartets(tr, q1, q2, t1, t2, t3, t4, f, adef);
+      quartetCounter++;
+      assert(quartetCounter == randomQuartets);
+    }
+}
 
 static void computeQuartets(tree *tr, analdef *adef, rawdata *rdta, cruncheddata *cdta)
 {
   /* some indices for generating quartets in an arbitrary way */
 
   int
-    flavor = ALL_QUARTETS,
-    i,
+    flavor = ALL_QUARTETS, //type of quartet calculation 
+    i, 
     t1, 
     t2, 
     t3, 
     t4, 
     *groups[4],
-    groupSize[4];
-  
+    groupSize[4];    
+
   double
-    fraction = 0.0,
+    fraction = 0.0, //fraction of random quartets to compute
     t;
 
   uint64_t
-    randomQuartets = (uint64_t)(adef->multipleRuns),
-    quartetCounter = 0,
-    numberOfQuartets = ((uint64_t)tr->mxtips * ((uint64_t)tr->mxtips - 1) * ((uint64_t)tr->mxtips - 2) * ((uint64_t)tr->mxtips - 3)) / 24;
-
-  /* use two inner nodes for building quartet trees */
+    randomQuartets = (uint64_t)(adef->multipleRuns), //number of random quartets to compute 
+    quartetCounter = 0, 
+    //total number of possible quartets, note that we count the following ((A,B),(C,D)), ((A,C),(B,D)), ((A,D),(B,C)) as one quartet here 
+    numberOfQuartets = ((uint64_t)tr->mxtips * ((uint64_t)tr->mxtips - 1) * ((uint64_t)tr->mxtips - 2) * ((uint64_t)tr->mxtips - 3)) / 24; 
+  
+  /* use two inner tree nodes for building quartet trees */
 
   nodeptr 	
     q1 = tr->nodep[tr->mxtips + 1],
@@ -11667,6 +12293,11 @@ static void computeQuartets(tree *tr, analdef *adef, rawdata *rdta, cruncheddata
   FILE 
     *f;
        
+  /***********************************/
+ 
+  
+
+
   /* build output file name */
     
   strcpy(quartetFileName,         workdir);
@@ -11674,8 +12305,6 @@ static void computeQuartets(tree *tr, analdef *adef, rawdata *rdta, cruncheddata
   strcat(quartetFileName,         run_id);
   
   /* open output file */
-
- 
 
 #ifdef _QUARTET_MPI
   if(processID == 0)
@@ -11691,22 +12320,29 @@ static void computeQuartets(tree *tr, analdef *adef, rawdata *rdta, cruncheddata
   if(!adef->useBinaryModelFile)
     {
 #ifdef _QUARTET_MPI
+      //the parallel version requires a pre-computed model parameter file as input!
       assert(0);
 #endif
 
-      /* get a starting tree: either reads in a tree or computes a randomized stepwise addition parsimony tree */
+      /* get a starting tree on which we optimize the likelihood model parameters: either reads in a tree or computes a randomized stepwise addition parsimony tree */
 
       getStartingTree(tr, adef);
    
-      /* optimize model parameters on that comprehensive tree that can subsequently be used for qyartet building */
-#ifndef __BLACKRIM 
+      /* optimize model parameters on that comprehensive tree that can subsequently be used for evaluation of quartet likelihoods */
+
+#ifndef __BLACKRIM //if BLACKRIM is defined, the model parameters will be optimized for each quartet individually
       modOpt(tr, adef, TRUE, adef->likelihoodEpsilon);
 #endif
 
       printBothOpen("Time for parsing input tree or building parsimony tree and optimizing model parameters: %f\n\n", gettime() - masterTime); 
+
+#ifndef __BLACKRIM
+      printBothOpen("Tree likelihood: %f\n\n", tr->likelihood);
+#endif
     }
   else
     {
+      //if a binary model parameter file has been specified, we just read the model parameters from there 
       readBinaryModel(tr, adef);
 
       printBothOpen("Time for reading model parameters: %f\n\n", gettime() - masterTime); 
@@ -11717,10 +12353,17 @@ static void computeQuartets(tree *tr, analdef *adef, rawdata *rdta, cruncheddata
 
   if(adef->useQuartetGrouping)
     {
+      //quartet grouping evaluates all possible quartets from four disjoint 
+      //sets of user-specified taxon names 
+
       flavor = GROUPED_QUARTETS;
+      
+      //parse the four disjoint sets of taxon names specified by the user from file      
       groupingParser(quartetGroupingFileName, groups, groupSize, tr);
 
 #ifdef __BLACKRIM     
+      //special implementation where we only sub-sample randomly from the quartets 
+      //defined by the four user-specified taxon sets 
       numberOfQuartets =  (uint64_t)groupSize[0] * (uint64_t)groupSize[1] * (uint64_t)groupSize[2] * (uint64_t)groupSize[3];
 
       if(randomQuartets > numberOfQuartets)
@@ -11733,13 +12376,18 @@ static void computeQuartets(tree *tr, analdef *adef, rawdata *rdta, cruncheddata
     }
   else
     {
+      //if the user specified more random quartets to sample than there actually 
+      //exist for the number of taxa, then fix this.
       if(randomQuartets > numberOfQuartets)
 	randomQuartets = 1;
   
       if(randomQuartets == 1)   
+	//change flavor if randomQuartets > possibleQuartets
 	flavor = ALL_QUARTETS;
       else
 	{      
+	  //compute the fraction of random quartets to sample 
+	  //there may be an issue here with the unit64_t <-> double cast
 	  fraction = (double)randomQuartets / (double)numberOfQuartets;      
 	  flavor = RANDOM_QUARTETS;
 	}
@@ -11796,6 +12444,9 @@ static void computeQuartets(tree *tr, analdef *adef, rawdata *rdta, cruncheddata
      tr->mxtips is the maximum number of tips in the alignment/tree
   */
 
+
+  //now do the respective quartet evaluations by switching over the three distinct flavors 
+
 #ifdef _QUARTET_MPI
   if(processID > 0)   
 #endif
@@ -11824,32 +12475,81 @@ static void computeQuartets(tree *tr, analdef *adef, rawdata *rdta, cruncheddata
 	  }
 	  break;
 	case RANDOM_QUARTETS:
-	  {
-	    /* randomly sub-sample a fraction of all quartets */
+	  {	 
+	    //code contributed by Sarah for drawing quartets without replacement :-)
+        // Sample random quartets without replacement in O(randomQuartets * log(tr->mxtips)) time and O(tr->mxtips) space.
+        // This is achieved by drawing random numbers in ascending order and using prefix sums to map a number to a
+        // quartet (t1,t2,t3,t4) using the lexicographical ordering of the quartets. For each quartet, it is required
+        // that 1 <= t1 < t2 < t3 < t4 <= tr->mxtips.
 	    
-	    for(t1 = 1; t1 <= tr->mxtips; t1++)
-	      for(t2 = t1 + 1; t2 <= tr->mxtips; t2++)
-		for(t3 = t2 + 1; t3 <= tr->mxtips; t3++)
-		  for(t4 = t3 + 1; t4 <= tr->mxtips; t4++)
-		    {
-		      double
-			r = randum(&adef->parsimonySeed);
-		      
-		      if(r < fraction)
-			{
+	    if(adef->sampleQuartetsWithoutReplacement)
+	      {
+		uint64_t
+		  *prefixSumF2 = (uint64_t*)rax_malloc(sizeof(uint64_t) * (size_t)(tr->mxtips - 2)),
+		  *prefixSumF3 = (uint64_t*)rax_malloc(sizeof(uint64_t) * (size_t)(tr->mxtips - 2)),
+		  *prefixSumF4 = (uint64_t*)rax_malloc(sizeof(uint64_t) * (size_t)(tr->mxtips - 2));
+
+		preprocessQuartetPrefix(tr->mxtips, prefixSumF2, prefixSumF3, prefixSumF4);
+
+		if (randomQuartets >= numberOfQuartets/13) // decide for each quartet whether to take it or not
+		  sampleQuartetsWithoutReplacementA(tr, tr->mxtips, adef->parsimonySeed, numberOfQuartets, randomQuartets, q1, q2, prefixSumF2, prefixSumF3, prefixSumF4, f, adef, 0);
+		else // decide how many quartets to skip before taking the next one
+		  sampleQuartetsWithoutReplacementD(tr, tr->mxtips, adef->parsimonySeed, numberOfQuartets, randomQuartets, q1, q2, prefixSumF2, prefixSumF3, prefixSumF4, f, adef, 0);
+
+		rax_free(prefixSumF2);
+		rax_free(prefixSumF3);
+		rax_free(prefixSumF4);
+	      }
+	    else
+	      {
+		//endless loop ta make sure we randomly sub-sample exactly as many quartets as the user specified
+
+		//This is not very elegant, but it works, note however, that especially when the number of 
+		//random quartets to be sampled is large, that is, close to the total number of quartets 
+		//some quartets may be sampled twice by pure chance. To randomly sample unique quartets 
+		//using hashes or bitmaps to store which quartets have already been sampled is not memory efficient.
+		//Insetad, we need to use a random number generator that can generate a unique series of random numbers 
+		//and then have a function f() that maps those random numbers to the corresponding index quartet (t1, t2, t3, t4),
+		//see above 
+		
+		do
+		  {	      
+		    //loop over all quartets 
+		    for(t1 = 1; t1 <= tr->mxtips; t1++)
+		      for(t2 = t1 + 1; t2 <= tr->mxtips; t2++)
+			for(t3 = t2 + 1; t3 <= tr->mxtips; t3++)
+			  for(t4 = t3 + 1; t4 <= tr->mxtips; t4++)
+			    {
+			      //chose a random number
+			      double
+				r = randum(&adef->parsimonySeed);
+			      
+			      //if the random number is smaller than the fraction of quartets to subsample
+			      //evaluate the likelihood of the current quartet
+			      if(r < fraction)
+				{
 #ifdef _QUARTET_MPI
-			  if((quartetCounter % (uint64_t)(processes - 1)) == (uint64_t)(processID - 1))
+				  //MPI version very simple and naive way to determine which processor 
+				  //is going to do the likelihood calculations for this quartet
+				  if((quartetCounter % (uint64_t)(processes - 1)) == (uint64_t)(processID - 1))
 #endif
-			    computeAllThreeQuartets(tr, q1, q2, t1, t2, t3, t4, f, adef);
-			  quartetCounter++;
-			}
-		      
-		      if(quartetCounter == randomQuartets)
-			goto DONE;
-		    }
-	    	  
-	  DONE:
-	    assert(quartetCounter == randomQuartets);
+				    //function that computes the likelihood for all three possible unrooted trees 
+				    //defined by the given quartet of taxa 
+				    computeAllThreeQuartets(tr, q1, q2, t1, t2, t3, t4, f, adef);
+				  //increment quartet counter that counts how many quartets we have evaluated
+				  quartetCounter++;
+				}
+			      
+			      //exit endless loop if we have randomly sub-sampled as many quartets as the user specified
+			      if(quartetCounter == randomQuartets)
+				goto DONE;
+			    }
+		  }
+		while(1);
+		
+	      DONE:
+		assert(quartetCounter == randomQuartets);	  
+	      }
 	  }
 	  break;
 	case GROUPED_QUARTETS:
@@ -11912,6 +12612,8 @@ static void computeQuartets(tree *tr, analdef *adef, rawdata *rdta, cruncheddata
     }
 #endif
   
+ 
+
   t = gettime() - t;
 
   printBothOpen("\nPure quartet computation time: %f secs\n", t);
@@ -12902,32 +13604,7 @@ static void stealBranchLengths(tree *tr, analdef *adef)
 }
 
 
-static void setupAscMissing(tree *tr, analdef *adef)
- {
-   int     
-     model,    
-     *perm = (int*)rax_malloc(sizeof(int) * (size_t)(tr->mxtips + 1));  
-  
-   for(model = 0; model < tr->NumberOfModels; model++)
-     {
-       if(tr->partitionData[model].ascBias && tr->useAscMissing)
-	 {
-	   int
-	     cutoff = (int)(tr->ascMissing * (double)(tr->mxtips) + 0.5),
-	     i;
 
-	   makePermutation(perm, 1, tr->mxtips, adef);	    
-	    
-	   for(i = 1; i <= cutoff; i++)	     	      
-	     tr->partitionData[model].ascMissingVector[perm[i]] = 1;	    	   
-	 }
-     }
-	
-   //TODO need to add barrier for copying ascMissingVector to all threads 
-   //and we also need to copy the flag value!
- 
-   rax_free(perm);
- }
 
 
 
@@ -13080,7 +13757,7 @@ int main (int argc, char *argv[])
     if(!adef->readTaxaOnly)
       {
 	int        
-	  countNonSev = 0,
+	  countNonSev = 0,	 
 	  countLG4 =0;
 	
 	assert(countAscBias == 0);
@@ -13095,7 +13772,8 @@ int main (int argc, char *argv[])
 	for(i = 0; i < tr->NumberOfModels; i++)
 	  {	    
 	    if(!(tr->partitionData[i].dataType == AA_DATA || tr->partitionData[i].dataType == DNA_DATA))
-	      countNonSev++;
+	      countNonSev++;	    
+	       
 	    
 	    if(tr->partitionData[i].protModels == LG4 || tr->partitionData[i].protModels == LG4X)
 	      {
@@ -13213,6 +13891,13 @@ int main (int argc, char *argv[])
   
     setRateHetAndDataIncrement(tr, adef);
 
+    if(tr->rateHetModel == GAMMA_I && tr->saveMemory)
+      {
+	 printf("\nError: Memory saving option \"-U\" not implemented for models with proportion\n");
+	 printf("of variable site estimates, reomve \"-U\" from your command line and re-run, exiting now.\n\n");
+	 errorExit(-1);
+      }
+
     if(countAscBias > 0 && !adef->readTaxaOnly)
       {
 	if(tr->ascertainmentCorrectionType == NOT_DEFINED)
@@ -13237,8 +13922,6 @@ int main (int argc, char *argv[])
     
     
     readAscFiles(tr);
-
-    setupAscMissing(tr, adef);
 
     if(!adef->readTaxaOnly) 
       {

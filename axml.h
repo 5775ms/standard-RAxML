@@ -168,9 +168,9 @@
 #define PointGamma(prob,alpha,beta)  PointChi2(prob,2.0*(alpha))/(2.0*(beta))
 
 #define programName        "RAxML"
-#define programVersion     "8.2.3"
-#define programVersionInt   8230
-#define programDate        "August 12 2015"
+#define programVersion     "8.2.8"
+#define programVersionInt   8280
+#define programDate        "March 23 2016"
 
 
 #define  TREE_EVALUATION                 0
@@ -268,10 +268,10 @@
 
 /* bootstopping stuff */
 
-#define BOOTSTOP_PERMUTATIONS 100
+//#define BOOTSTOP_PERMUTATIONS 100
 #define START_BSTOP_TEST      10
 
-#define FC_THRESHOLD          99
+//#define FC_THRESHOLD          99
 #define FC_SPACING            50
 #define FC_LOWER              0.99
 #define FC_INIT               20
@@ -604,7 +604,6 @@ typedef struct {
   boolean ascBias;  
   int     ascOffset;
   int     *ascExpVector;
-  int     *ascMissingVector;
   double  *ascSumBuffer;
   double  *ascVector;
   double ascScaler[64];
@@ -1066,9 +1065,7 @@ typedef  struct  {
     
   boolean doSubtreeEPA;
 
-  double ascMissing;
-  boolean useAscMissing;
-
+  
 } tree;
 
 
@@ -1176,6 +1173,9 @@ typedef  struct {
   boolean       noSequenceCheck;
   boolean       useBFGS;
   boolean       setThreadAffinity;
+  int           bootstopPermutations;
+  int           fcThreshold; 
+  boolean       sampleQuartetsWithoutReplacement;
 } analdef;
 
 
@@ -1210,7 +1210,7 @@ typedef struct
 
 
 
-extern void ascertainmentBiasSequence(unsigned char tip[32], int numStates, int dataType, int nodeNumber, int *ascMissingVector);
+extern void ascertainmentBiasSequence(unsigned char tip[32], int numStates, int dataType, int nodeNumber);
 
 extern void computePlacementBias(tree *tr, analdef *adef);
 
